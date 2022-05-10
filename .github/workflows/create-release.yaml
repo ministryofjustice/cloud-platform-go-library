@@ -1,4 +1,5 @@
 # On tag creation this GitHub Action will form a Changelog and release.
+name: release
 on:
   push:
     # run only against tags
