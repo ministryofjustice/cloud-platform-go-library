@@ -33,7 +33,7 @@ jobs:
       - name: Run tests
         run: |
           set -euo pipefail
-          go test -json -v ./... 2>&1 | tee /tmp/gotest.log | gotestfmt
+          go test -json -race -covermode=atomic -coverprofile=coverage.out -v ./... 2>&1 | tee /tmp/gotest.log | gotestfmt
 
       # Upload the original go test log as an artifact for later review.
       - name: Upload test log
@@ -43,3 +43,6 @@ jobs:
           name: test-log
           path: /tmp/gotest.log
           if-no-files-found: error
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v2
