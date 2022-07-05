@@ -11,7 +11,7 @@ type Cluster struct {
 	NewestNode v1.Node
 	Nodes      v1.NodeList
 	OldestNode v1.Node
-	Pods       []v1.Pod
+	Pods       v1.PodList
 	StuckPods  []v1.Pod
 }
 
