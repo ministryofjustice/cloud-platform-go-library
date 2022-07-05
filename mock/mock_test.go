@@ -143,3 +143,19 @@ func TestNewCluster(t *testing.T) {
 		})
 	}
 }
+
+func TestWithWorkingPods(t *testing.T) {
+	tests := []struct {
+		name string
+		want MockOptions
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := WithWorkingPods(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("WithWorkingPods() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
