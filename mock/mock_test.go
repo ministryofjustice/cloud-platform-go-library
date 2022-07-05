@@ -28,17 +28,19 @@ func TestNewCluster(t *testing.T) {
 			},
 			want: &Mock{
 				cluster.Cluster{
-					Nodes: []v1.Node{
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node1",
+					Nodes: v1.NodeList{
+						Items: []v1.Node{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node1",
+								},
 							},
-						},
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node2",
-								CreationTimestamp: metav1.Time{
-									Time: time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node2",
+									CreationTimestamp: metav1.Time{
+										Time: time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+									},
 								},
 							},
 						},
@@ -55,22 +57,24 @@ func TestNewCluster(t *testing.T) {
 			},
 			want: &Mock{
 				cluster.Cluster{
-					Nodes: []v1.Node{
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node1",
+					Nodes: v1.NodeList{
+						Items: []v1.Node{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node1",
+								},
 							},
-						},
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node2",
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node2",
+								},
 							},
-						},
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node3",
-								Labels: map[string]string{
-									"monitoring_ng": "true",
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node3",
+									Labels: map[string]string{
+										"monitoring_ng": "true",
+									},
 								},
 							},
 						},
@@ -87,39 +91,41 @@ func TestNewCluster(t *testing.T) {
 			},
 			want: &Mock{
 				cluster.Cluster{
-					Nodes: []v1.Node{
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node1",
+					Nodes: v1.NodeList{
+						Items: []v1.Node{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node1",
+								},
 							},
-						},
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node2",
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node2",
+								},
 							},
-						},
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node3",
-							},
-							Status: v1.NodeStatus{
-								Conditions: []v1.NodeCondition{
-									{
-										Type:   v1.NodeDiskPressure,
-										Status: v1.ConditionUnknown,
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node3",
+								},
+								Status: v1.NodeStatus{
+									Conditions: []v1.NodeCondition{
+										{
+											Type:   v1.NodeDiskPressure,
+											Status: v1.ConditionUnknown,
+										},
 									},
 								},
 							},
-						},
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node4",
-							},
-							Status: v1.NodeStatus{
-								Conditions: []v1.NodeCondition{
-									{
-										Type:   v1.NodeReady,
-										Status: v1.ConditionFalse,
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node4",
+								},
+								Status: v1.NodeStatus{
+									Conditions: []v1.NodeCondition{
+										{
+											Type:   v1.NodeReady,
+											Status: v1.ConditionFalse,
+										},
 									},
 								},
 							},

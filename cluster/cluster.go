@@ -9,7 +9,7 @@ import (
 type Cluster struct {
 	Name       string
 	NewestNode v1.Node
-	Nodes      []v1.Node
+	Nodes      v1.NodeList
 	OldestNode v1.Node
 	Pods       []v1.Pod
 	StuckPods  []v1.Pod
@@ -21,5 +21,5 @@ func NewWithValues(c *client.KubeClient) (*Cluster, error) {
 }
 
 func (c *Cluster) GetName() string {
-	return c.Nodes[0].Labels["Cluster"]
+	return c.Nodes.Items[0].Labels["Cluster"]
 }
