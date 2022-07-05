@@ -70,7 +70,7 @@ func NewestNode(c client.KubeClient, nodes []v1.Node) v1.Node {
 	return newest
 }
 
-func Pods(c client.KubeClient) ([]*v1.Pod, error) {
+func AllPods(c client.KubeClient) ([]*v1.Pod, error) {
 	return nil, nil
 }
 
