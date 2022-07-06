@@ -33,6 +33,9 @@ func TestNewCluster(t *testing.T) {
 							{
 								ObjectMeta: metav1.ObjectMeta{
 									Name: "Node1",
+									Labels: map[string]string{
+										"Cluster": "Cluster1",
+									},
 								},
 							},
 							{
@@ -144,7 +147,7 @@ func TestNewCluster(t *testing.T) {
 
 			want: &Mock{
 				cluster.Cluster{
-					Pods: v1.PodList{
+					Pods: &v1.PodList{
 						Items: []v1.Pod{
 							{
 								ObjectMeta: metav1.ObjectMeta{
@@ -170,7 +173,7 @@ func TestNewCluster(t *testing.T) {
 			},
 			want: &Mock{
 				cluster.Cluster{
-					Pods: v1.PodList{
+					Pods: &v1.PodList{
 						Items: []v1.Pod{
 							{
 								ObjectMeta: metav1.ObjectMeta{

@@ -40,7 +40,7 @@ func TestAllNodes(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    []v1.Node
+		want    v1.NodeList
 		wantErr bool
 	}{
 		{
@@ -50,17 +50,22 @@ func TestAllNodes(t *testing.T) {
 					Clientset: fake.NewSimpleClientset(&standard.Cluster.Nodes),
 				},
 			},
-			want: []v1.Node{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "Node1",
+			want: v1.NodeList{
+				Items: []v1.Node{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "Node1",
+							Labels: map[string]string{
+								"Cluster": "Cluster1",
+							},
+						},
 					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "Node2",
-						CreationTimestamp: metav1.Time{
-							Time: time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "Node2",
+							CreationTimestamp: metav1.Time{
+								Time: time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+							},
 						},
 					},
 				},

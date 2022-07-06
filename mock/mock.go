@@ -36,6 +36,9 @@ func WithWorkingNodes() MockOptions {
 				{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "Node1",
+						Labels: map[string]string{
+							"Cluster": "Cluster1",
+						},
 					},
 				},
 				{
@@ -128,7 +131,7 @@ func WithBrokenNodes() MockOptions {
 // WithWorkingPods returns a MockOptions function that sets the pods to be running.
 func WithWorkingPods() MockOptions {
 	return func(m *Mock) {
-		m.Cluster.Pods = v1.PodList{
+		m.Cluster.Pods = &v1.PodList{
 			Items: []v1.Pod{
 				{
 					ObjectMeta: metav1.ObjectMeta{
@@ -148,7 +151,7 @@ func WithWorkingPods() MockOptions {
 // WithBrokenPods returns a MockOptions function that sets some pods to be running and some not.
 func WithBrokenPods() MockOptions {
 	return func(m *Mock) {
-		m.Cluster.Pods = v1.PodList{
+		m.Cluster.Pods = &v1.PodList{
 			Items: []v1.Pod{
 				{
 					ObjectMeta: metav1.ObjectMeta{
