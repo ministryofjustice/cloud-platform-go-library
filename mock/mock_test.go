@@ -134,27 +134,72 @@ func TestNewCluster(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Create a mock cluster with working pods",
+			args: args{
+				opts: []MockOptions{
+					WithWorkingPods(),
+				},
+			},
+
+			want: &Mock{
+				cluster.Cluster{
+					Pods: v1.PodList{
+						Items: []v1.Pod{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Pod1",
+								},
+							},
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Pod2",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Create a mock cluster with broken pods",
+			args: args{
+				opts: []MockOptions{
+					WithBrokenPods(),
+				},
+			},
+			want: &Mock{
+				cluster.Cluster{
+					Pods: v1.PodList{
+						Items: []v1.Pod{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Pod1",
+								},
+							},
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Pod2",
+								},
+							},
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Pod3",
+								},
+								Status: v1.PodStatus{
+									Phase: v1.PodFailed,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := NewCluster(tt.args.opts...); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NewCluster() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestWithWorkingPods(t *testing.T) {
-	tests := []struct {
-		name string
-		want MockOptions
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := WithWorkingPods(); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("WithWorkingPods() = %v, want %v", got, tt.want)
 			}
 		})
 	}
