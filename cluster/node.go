@@ -10,13 +10,13 @@ import (
 )
 
 // AllNodes returns all nodes in a cluster (including master nodes) as a slice of v1.Node objects.
-func AllNodes(c client.KubeClient) ([]v1.Node, error) {
+func AllNodes(c client.KubeClient) (v1.NodeList, error) {
 	nodeList, err := c.Clientset.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list nodes: %s", err)
+		return *nodeList, fmt.Errorf("failed to list nodes: %s", err)
 	}
 
-	return nodeList.Items, nil
+	return *nodeList, nil
 }
 
 // MonitoringNodes returns all nodes in the cluster tagged as monitoring nodes.
@@ -27,7 +27,7 @@ func MonitoringNodes(c client.KubeClient) ([]*v1.Node, error) {
 	}
 
 	var monitoringNodes []*v1.Node
-	for _, node := range nodes {
+	for _, node := range nodes.Items {
 		if node.Labels["monitoring_ng"] == "true" {
 			monitoringNodes = append(monitoringNodes, &node)
 		}
@@ -69,4 +69,3 @@ func NewestNode(c client.KubeClient, nodes []v1.Node) v1.Node {
 
 	return newest
 }
-

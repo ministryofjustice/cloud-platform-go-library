@@ -141,5 +141,5 @@ func TestNewestNode(t *testing.T) {
 		t.Errorf("AllNodes() error = %v", err)
 	}
 
-	assert.Equal(t, "Node1", cluster.NewestNode(mockClient, nodes).Name)
+	assert.Equal(t, "Node1", cluster.NewestNode(mockClient, nodes.Items).Name)
 }
