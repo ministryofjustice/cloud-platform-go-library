@@ -70,25 +70,3 @@ func NewestNode(c client.KubeClient, nodes []v1.Node) v1.Node {
 	return newest
 }
 
-// AllPods returns all pods in a cluster as PodList objects.
-func AllPods(c client.KubeClient) (*v1.PodList, error) {
-	podList, err := c.Clientset.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list pods: %s", err)
-	}
-
-	return podList, nil
-}
-
-// StuckPods returns all pods in a cluster that are in a non-running state.
-func StuckPods(c client.KubeClient, pods v1.PodList) ([]*v1.Pod, error) {
-	var stuckPods []*v1.Pod
-	for _, pod := range pods.Items {
-		fmt.Println(pod.Status.Phase)
-		if pod.Status.Phase == v1.PodPending || pod.Status.Phase == v1.PodFailed || pod.Status.Phase == v1.PodUnknown {
-			stuckPods = append(stuckPods, &pod)
-		}
-	}
-
-	return stuckPods, nil
-}
