@@ -5,7 +5,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
-// Clustr struct represents an MoJ Cloud Platform Kubernetes cluster object
+// Cluster struct represents an MoJ Cloud Platform Kubernetes cluster object
 type Cluster struct {
 	Name       string
 	NewestNode v1.Node
