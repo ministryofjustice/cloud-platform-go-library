@@ -44,5 +44,4 @@ func NewWithValues(c client.KubeClient) (*Cluster, error) {
 // GetName is a method function to get the name of the cluster.
 func (c *Cluster) GetName() {
 	c.Name = c.Nodes.Items[0].Labels["Cluster"]
-	return
 }

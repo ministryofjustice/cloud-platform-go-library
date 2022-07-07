@@ -151,7 +151,7 @@ func (kube *KubeClient) BuildClientSetFromS3(filepath string, awsOpt AwsOptions)
 // NewConfigFromContext returns a config type ready to create a Kubernetes interface.
 func (kube *KubeClient) NewConfigFromContext() (*rest.Config, error) {
 	if kube.Path == "" || kube.Context == "" {
-		return nil, fmt.Errorf("Config file and Context must be set")
+		return nil, fmt.Errorf("config file and Context must be set")
 	}
 
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
