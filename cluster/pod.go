@@ -23,7 +23,6 @@ func AllPods(c client.KubeClient) (*v1.PodList, error) {
 func StuckPods(c client.KubeClient, pods v1.PodList) ([]*v1.Pod, error) {
 	var stuckPods []*v1.Pod
 	for _, pod := range pods.Items {
-		fmt.Println(pod.Status.Phase)
 		if pod.Status.Phase == v1.PodPending || pod.Status.Phase == v1.PodFailed || pod.Status.Phase == v1.PodUnknown {
 			stuckPods = append(stuckPods, &pod)
 		}
