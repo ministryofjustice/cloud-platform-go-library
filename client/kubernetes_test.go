@@ -233,7 +233,7 @@ func TestKubeClient_SwitchKubeContext(t *testing.T) {
 }
 
 func createMockKubeConfigFile(path string) (*os.File, error) {
-	var data = []byte(`
+	data := []byte(`
 apiVersion: v1
 clusters:
 - cluster:

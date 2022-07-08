@@ -3,6 +3,7 @@ package mock
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ministryofjustice/cloud-platform-go-library/cluster"
 	v1 "k8s.io/api/core/v1"
@@ -27,15 +28,23 @@ func TestNewCluster(t *testing.T) {
 			},
 			want: &Mock{
 				cluster.Cluster{
-					Nodes: []v1.Node{
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node1",
+					Nodes: v1.NodeList{
+						Items: []v1.Node{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node1",
+									Labels: map[string]string{
+										"Cluster": "Cluster1",
+									},
+								},
 							},
-						},
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node2",
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node2",
+									CreationTimestamp: metav1.Time{
+										Time: time.Date(2020, time.January, 1, 0, 0, 0, 0, time.UTC),
+									},
+								},
 							},
 						},
 					},
@@ -51,22 +60,24 @@ func TestNewCluster(t *testing.T) {
 			},
 			want: &Mock{
 				cluster.Cluster{
-					Nodes: []v1.Node{
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node1",
+					Nodes: v1.NodeList{
+						Items: []v1.Node{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node1",
+								},
 							},
-						},
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node2",
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node2",
+								},
 							},
-						},
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node3",
-								Labels: map[string]string{
-									"monitoring_ng": "true",
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node3",
+									Labels: map[string]string{
+										"monitoring_ng": "true",
+									},
 								},
 							},
 						},
@@ -83,40 +94,103 @@ func TestNewCluster(t *testing.T) {
 			},
 			want: &Mock{
 				cluster.Cluster{
-					Nodes: []v1.Node{
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node1",
+					Nodes: v1.NodeList{
+						Items: []v1.Node{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node1",
+								},
 							},
-						},
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node2",
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node2",
+								},
 							},
-						},
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node3",
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node3",
+								},
+								Status: v1.NodeStatus{
+									Conditions: []v1.NodeCondition{
+										{
+											Type:   v1.NodeDiskPressure,
+											Status: v1.ConditionUnknown,
+										},
+									},
+								},
 							},
-							Status: v1.NodeStatus{
-								Conditions: []v1.NodeCondition{
-									{
-										Type:   v1.NodeDiskPressure,
-										Status: v1.ConditionUnknown,
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Node4",
+								},
+								Status: v1.NodeStatus{
+									Conditions: []v1.NodeCondition{
+										{
+											Type:   v1.NodeReady,
+											Status: v1.ConditionFalse,
+										},
 									},
 								},
 							},
 						},
-						{
-							ObjectMeta: metav1.ObjectMeta{
-								Name: "Node4",
+					},
+				},
+			},
+		},
+		{
+			name: "Create a mock cluster with working pods",
+			args: args{
+				opts: []MockOptions{
+					WithWorkingPods(),
+				},
+			},
+
+			want: &Mock{
+				cluster.Cluster{
+					Pods: &v1.PodList{
+						Items: []v1.Pod{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Pod1",
+								},
 							},
-							Status: v1.NodeStatus{
-								Conditions: []v1.NodeCondition{
-									{
-										Type:   v1.NodeReady,
-										Status: v1.ConditionFalse,
-									},
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Pod2",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "Create a mock cluster with broken pods",
+			args: args{
+				opts: []MockOptions{
+					WithBrokenPods(),
+				},
+			},
+			want: &Mock{
+				cluster.Cluster{
+					Pods: &v1.PodList{
+						Items: []v1.Pod{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Pod1",
+								},
+							},
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Pod2",
+								},
+							},
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Pod3",
+								},
+								Status: v1.PodStatus{
+									Phase: v1.PodFailed,
 								},
 							},
 						},
