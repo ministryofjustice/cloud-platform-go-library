@@ -11,7 +11,6 @@ import (
 
 // AllNamespaces returns all namespaces in the cluster.
 func AllNamespaces(c *client.KubeClient) (*v1.NamespaceList, error) {
-	// Gather list of namespaces from a cluster
 	list, err := c.Clientset.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -58,4 +57,61 @@ func DeleteNamespace(c *client.KubeClient, name string) error {
 // A team is a GitHub group or organization defined in the cloud-platform environments repository.
 func GetTeamNamespaces(team string) ([]*v1.Namespace, error) {
 	return nil, nil
+}
+
+// NamespaceSlackChannel returns the slack channel name for the given namespace.
+func NamespaceSlackChannel(c *client.KubeClient, name string) (string, error) {
+	ns, err := Namespace(c, name)
+	if err != nil {
+		return "", err
+	}
+	return ns.Annotations["cloud-platform.justice.gov.uk/slack-channel"], nil
+}
+
+// ProductionNamespace returns a slice of namespaces with a production label.
+func ProductionNamespace(c *client.KubeClient) ([]*v1.Namespace, error) {
+	list, err := AllNamespaces(c)
+	if err != nil {
+		return nil, err
+	}
+	var namespaces []*v1.Namespace
+	for _, namespace := range list.Items {
+		if namespace.Labels["cloud-platform.justice.gov.uk/is-production"] == "true" {
+			namespaces = append(namespaces, &namespace)
+		}
+	}
+	return namespaces, nil
+}
+
+// NonProductionNamespace returns a slice of namespaces without a production label.
+func NonProductionNamespace(c *client.KubeClient) ([]*v1.Namespace, error) {
+	list, err := AllNamespaces(c)
+	if err != nil {
+		return nil, err
+	}
+	var namespaces []*v1.Namespace
+	for _, namespace := range list.Items {
+		if namespace.Labels["cloud-platform.justice.gov.uk/is-production"] != "true" {
+			namespaces = append(namespaces, &namespace)
+		}
+	}
+	return namespaces, nil
+}
+
+// NamespaceGithubTeam returns the github team name for the given namespace.
+func NamespaceSourceCode(c *client.KubeClient, name string) (string, error) {
+	ns, err := Namespace(c, name)
+	if err != nil {
+		return "", err
+	}
+	return ns.Annotations["cloud-platform.justice.gov.uk/source-code"], nil
+}
+
+// NamespaceOwner returns the owner of the namespace.
+func NamespaceOwner(c *client.KubeClient, name string) (string, error) {
+	ns, err := Namespace(c, name)
+	if err != nil {
+		return "", err
+	}
+	return ns.Annotations["cloud-platform.justice.gov.uk/team-name"], nil
 }
