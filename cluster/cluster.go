@@ -13,6 +13,7 @@ type Cluster struct {
 	OldestNode v1.Node
 	Pods       *v1.PodList
 	StuckPods  []*v1.Pod
+	Namespaces v1.NamespaceList
 }
 
 // NewWithValues returns a full Cluster object with populated values.

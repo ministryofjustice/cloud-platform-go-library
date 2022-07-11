@@ -175,3 +175,23 @@ func WithBrokenPods() MockOptions {
 		}
 	}
 }
+
+// WithNamespaces returns a MockOptions function that sets the namespaces to be ready.
+func WithNamespaces() MockOptions {
+	return func(m *Mock) {
+		m.Cluster.Namespaces = v1.NamespaceList{
+			Items: []v1.Namespace{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "Namespace1",
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "Namespace2",
+					},
+				},
+			},
+		}
+	}
+}
