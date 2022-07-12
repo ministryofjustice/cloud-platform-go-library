@@ -165,6 +165,32 @@ func TestNewCluster(t *testing.T) {
 			},
 		},
 		{
+			name: "Create a mock cluster with namespaces",
+			args: args{
+				opts: []MockOptions{
+					WithNamespaces(),
+				},
+			},
+			want: &Mock{
+				cluster.Cluster{
+					Namespaces: v1.NamespaceList{
+						Items: []v1.Namespace{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Namespace1",
+								},
+							},
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Namespace2",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Create a mock cluster with broken pods",
 			args: args{
 				opts: []MockOptions{
