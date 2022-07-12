@@ -55,7 +55,7 @@ func DeleteNamespace(c *client.KubeClient, name string) error {
 
 // GetTeamNamespaces returns all namespaces in the cluster that are owned by the given team.
 // A team is a GitHub group or organization defined in the cloud-platform environments repository.
-func GetTeamNamespaces(team string) ([]*v1.Namespace, error) {
+func GetTeamNamespaces(c *client.KubeClient, team string) ([]*v1.Namespace, error) {
 	return nil, nil
 }
 
@@ -91,7 +91,7 @@ func NonProductionNamespace(c *client.KubeClient) ([]*v1.Namespace, error) {
 	}
 	var namespaces []*v1.Namespace
 	for _, namespace := range list.Items {
-		if namespace.Labels["cloud-platform.justice.gov.uk/is-production"] != "true" {
+		if namespace.Labels["cloud-platform.justice.gov.uk/is-production"] == "false" {
 			namespaces = append(namespaces, &namespace)
 		}
 	}
