@@ -70,32 +70,12 @@ func NamespaceSlackChannel(c *client.KubeClient, name string) (string, error) {
 
 // ProductionNamespace returns a slice of namespaces with a production label.
 func ProductionNamespace(c *client.KubeClient) ([]*v1.Namespace, error) {
-	list, err := AllNamespaces(c)
-	if err != nil {
-		return nil, err
-	}
-	var namespaces []*v1.Namespace
-	for _, namespace := range list.Items {
-		if namespace.Labels["cloud-platform.justice.gov.uk/is-production"] == "true" {
-			namespaces = append(namespaces, &namespace)
-		}
-	}
-	return namespaces, nil
+	return nil, nil
 }
 
 // NonProductionNamespace returns a slice of namespaces without a production label.
 func NonProductionNamespace(c *client.KubeClient) ([]*v1.Namespace, error) {
-	list, err := AllNamespaces(c)
-	if err != nil {
-		return nil, err
-	}
-	var namespaces []*v1.Namespace
-	for _, namespace := range list.Items {
-		if namespace.Labels["cloud-platform.justice.gov.uk/is-production"] == "false" {
-			namespaces = append(namespaces, &namespace)
-		}
-	}
-	return namespaces, nil
+	return nil, nil
 }
 
 // NamespaceGithubTeam returns the github team name for the given namespace.
