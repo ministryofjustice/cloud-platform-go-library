@@ -183,6 +183,38 @@ func TestNewCluster(t *testing.T) {
 							{
 								ObjectMeta: metav1.ObjectMeta{
 									Name: "Namespace2",
+									Labels: map[string]string{
+										"cloud-platform.justice.gov.uk/is-production":    "true",
+										"cloud-platform.justice.gov.uk/environment-name": "production",
+									},
+									Annotations: map[string]string{
+										"cloud-platform.justice.gov.uk/business-unit": "HQ",
+										"cloud-platform.justice.gov.uk/slack-channel": "cloud-platform",
+										"cloud-platform.justice.gov.uk/application":   "Namespace to test Terraform resources",
+										"cloud-platform.justice.gov.uk/owner":         "Cloud Platform: platforms@digital.justice.gov.uk",
+										"cloud-platform.justice.gov.uk/source-code":   "https://github.com/ministryofjustice/cloud-platform",
+										"cloud-platform.justice.gov.uk/team-name":     "webops",
+										"cloud-platform.justice.gov.uk/review-after":  "12.12.2019",
+									},
+								},
+							},
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name: "Namespace3",
+									Labels: map[string]string{
+										"cloud-platform.justice.gov.uk/is-production":    "false",
+										"cloud-platform.justice.gov.uk/environment-name": "development",
+									},
+									Annotations: map[string]string{
+										"cloud-platform.justice.gov.uk/business-unit": "HMPPS",
+										"cloud-platform.justice.gov.uk/slack-channel": "fake-channel",
+										"cloud-platform.justice.gov.uk/application":   "Really cool app",
+
+										"cloud-platform.justice.gov.uk/owner":        "Really cool team",
+										"cloud-platform.justice.gov.uk/source-code":  "https://github.com/ministryofjustice/not-cloud-platform",
+										"cloud-platform.justice.gov.uk/team-name":    "noops",
+										"cloud-platform.justice.gov.uk/review-after": "12.11.2019",
+									},
 								},
 							},
 						},
