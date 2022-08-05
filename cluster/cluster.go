@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"github.com/ministryofjustice/cloud-platform-go-library/client"
+	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -71,10 +72,38 @@ func (c *Cluster) GetName() {
 	c.Name = c.Nodes.Items[0].Labels["Cluster"]
 }
 
+func findTopLevelGitDir(workingDir string) (string, error) {
+	dir, err := filepath.Abs(workingDir)
+	if err != nil {
+		return "", errors.Wrap(err, "invalid working dir")
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return dir, nil
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", errors.New("no git repository found")
+		}
+		dir = parent
+	}
+}
+
 // Create creates a new Kubernetes cluster using the options passed to it.
 func (c *Cluster) Create(opts *CreateOptions) error {
+	repoName, err := findTopLevelGitDir(".")
+	if err != nil {
+		return err
+	}
+
+	if !strings.Contains(repoName, "cloud-platform-infrastructure") {
+		return errors.New("must be run from the cloud-platform-infrastructure repository")
+	}
+
 	// create vpc
-	err := createVpc(opts)
+	err = c.createVpc(opts)
 	if err != nil {
 		return err
 	}
@@ -101,7 +130,7 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 }
 
 // createVpc creates a new VPC in AWS.
-func createVpc(opts *CreateOptions) error {
+func (c *Cluster) createVpc(opts *CreateOptions) error {
 	return nil
 }
 
