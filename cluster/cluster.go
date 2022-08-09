@@ -2,13 +2,19 @@ package cluster
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/hashicorp/go-version"
 	install "github.com/hashicorp/hc-install"
 	"github.com/hashicorp/hc-install/fs"
@@ -19,6 +25,7 @@ import (
 	"github.com/ministryofjustice/cloud-platform-go-library/client"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // Cluster struct represents an MoJ Cloud Platform Kubernetes cluster object
@@ -30,6 +37,7 @@ type Cluster struct {
 	Pods       *v1.PodList
 	StuckPods  []*v1.Pod
 	Namespaces v1.NamespaceList
+	VpcId      string
 }
 
 // CreateOptions struct represents the options passed to the Create method.
@@ -54,6 +62,14 @@ type AuthOpts struct {
 	Domain       string
 	ClientId     string
 	ClientSecret string
+}
+
+// EC2DescribeVpcEndpointConnectionsAPI defines the interface for the DescribeVpcEndpointConnections function.
+// We use this interface to test the function using a mocked service.
+type EC2DescribeVpcEndpointConnectionsAPI interface {
+	DescribeVpcEndpointConnections(ctx context.Context,
+		params *ec2.DescribeVpcEndpointConnectionsInput,
+		optFns ...func(*ec2.Options)) (*ec2.DescribeVpcEndpointConnectionsOutput, error)
 }
 
 // NewWithValues returns a full Cluster object with populated values.
@@ -109,6 +125,9 @@ func findTopLevelGitDir(workingDir string) (string, error) {
 // Create creates a new Kubernetes cluster using the options passed to it.
 func (c *Cluster) Create(opts *CreateOptions) error {
 	c.Name = opts.Name
+	if c.Name == "live" || c.Name == "manager" {
+		return errors.New("cannot create a cluster with the name live or manager")
+	}
 
 	repoName, err := findTopLevelGitDir(".")
 	if err != nil {
@@ -119,12 +138,11 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 		return errors.New("must be run from the cloud-platform-infrastructure repository")
 	}
 
-	fmt.Printf("Creating cluster %s", c.Name)
+	fmt.Printf("Creating cluster %s\n", c.Name)
 	i := install.NewInstaller()
 
 	v0_14_8 := version.Must(version.NewVersion("0.14.8"))
 
-	fmt.Println("Installing terraform")
 	execPath, err := i.Ensure(context.Background(), []src.Source{
 		&fs.ExactVersion{
 			Product: product.Terraform,
@@ -139,13 +157,15 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 	defer i.Remove(context.Background())
 
 	// create vpc
+	fmt.Println("Creating VPC")
 	err = c.CreateVpc(opts, execPath)
 	if err != nil {
 		return err
 	}
 
 	// create kubernetes cluster
-	err = createCluster(opts)
+	fmt.Println("Creating Kubernetes cluster")
+	err = c.CreateCluster(opts, execPath)
 	if err != nil {
 		return err
 	}
@@ -165,99 +185,84 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 	return nil
 }
 
-// createVpc creates a new VPC in AWS.
-func (c *Cluster) CreateVpc(opts *CreateOptions, execPath string) error {
-	fmt.Println("Checking out tf dir")
-	workingDir := "terraform/aws-accounts/cloud-platform-aws/vpc"
-	tf, err := tfexec.NewTerraform(workingDir, execPath)
-	if err != nil {
-		log.Fatalf("error running NewTerraform: %s", err)
-	}
-
-	// if .terraform.tfstate directory exists, delete it
-	fmt.Println("Deleting .terraform.tfstate directory")
-	if _, err := os.Stat("terraform/aws-accounts/cloud-platform-aws/vpc/.terraform"); err == nil {
-		err = os.RemoveAll("terraform/aws-accounts/cloud-platform-aws/vpc/.terraform")
+func deleteLocalState(path string) error {
+	if _, err := os.Stat(path); err == nil {
+		err = os.RemoveAll(path)
 		if err != nil {
 			return err
 		}
 	}
 
-	fmt.Println("Performing a terraform init")
-	err = tf.Init(context.Background())
+	return nil
+}
+
+func terraformInit(tf *tfexec.Terraform) error {
+	err := tf.Init(context.Background())
 	if err != nil {
 		return err
 	}
+	return nil
+}
 
-	fmt.Println("Creating a new workspace")
-	err = tf.WorkspaceNew(context.Background(), c.Name)
-	if err != nil {
-		return err
+func terraformWorkspace(workspace string, tf *tfexec.Terraform) (string, error) {
+	list, _, err := tf.WorkspaceList(context.Background())
+
+	for _, ws := range list {
+		if ws == workspace {
+			err = tf.WorkspaceSelect(context.Background(), workspace)
+			if err != nil {
+				return "", err
+			}
+			return workspace, nil
+		}
 	}
 
+	err = tf.WorkspaceNew(context.Background(), workspace)
+	if err != nil {
+		return "", err
+	}
 	ws, err := tf.WorkspaceShow(context.Background())
-	fmt.Println("Applying in workspace", ws)
-	planPath := fmt.Sprintf("%s/%s-%v", "./", "plan", time.Now().Unix())
-	planOptions := []tfexec.PlanOption{
-		tfexec.Out(planPath),
-		tfexec.Refresh(true),
-		tfexec.Parallelism(1),
+	if err != nil {
+		return "", err
 	}
-	_, err = tf.Plan(context.Background(), planOptions...)
+
+	return ws, nil
+}
+
+func terraformPlan(tf *tfexec.Terraform, planOptions []tfexec.PlanOption, planPath, workspace string, output bool) error {
+	_, err := tf.Plan(context.Background(), planOptions...)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Generating plan file")
-	plan, err := tf.ShowPlanFile(context.Background(), planPath)
+	if !output {
+		return nil
+	}
+
+	plan, err := tf.ShowPlanFileRaw(context.Background(), planPath)
 	if err != nil {
 		return err
 	}
 
-	// TODO: Make this a debug option
-	for k, v := range plan.OutputChanges {
-		fmt.Printf("%s: %s\n", k, v)
-	}
+	fmt.Println(plan)
 
-	fmt.Println("Applying plan")
-	statePath := fmt.Sprintf("%s/%s-%v", "./", "state", time.Now().Unix())
-	applyOptions := []tfexec.ApplyOption{
-		tfexec.DirOrPlan(planPath),
-		tfexec.StateOut(statePath),
-		tfexec.Parallelism(1),
-	}
-	err = tf.Apply(context.Background(), applyOptions...)
-	if err != nil {
-		return err
-	}
+	return nil
+}
 
-	// Show the final terraform
-	fmt.Println("Showing final state")
-	state, err := tf.ShowStateFile(context.Background(), statePath)
-	if err != nil {
-		return err
-	}
+func terraformApply(tf *tfexec.Terraform, applyOptions []tfexec.ApplyOption, workspace string) error {
+	var noInitErr *tfexec.ErrNoInit
+	var couldNotLoad *tfexec.ErrConfigInvalid
 
-	for k, v := range state.Values.Outputs {
-		fmt.Printf("%s: %v\n", k, v)
+	err := tf.Apply(context.Background(), applyOptions...)
+	// handle a case where you need to init again
+	if errors.As(err, &noInitErr) || errors.As(err, &couldNotLoad) {
+		fmt.Println("Init required, running init again")
+		err = terraformInit(tf)
+		if err != nil {
+			return err
+		}
+		err = tf.WorkspaceSelect(context.Background(), workspace)
 	}
-
-	destroyOptions := []tfexec.DestroyOption{
-		tfexec.Refresh(true),
-		tfexec.Parallelism(1),
-	}
-
-	err = tf.Destroy(context.Background(), destroyOptions...)
-	if err != nil {
-		return err
-	}
-
-	err = tf.WorkspaceSelect(context.Background(), "default")
-	if err != nil {
-		return err
-	}
-
-	err = tf.WorkspaceDelete(context.Background(), c.Name)
 	if err != nil {
 		return err
 	}
@@ -265,8 +270,195 @@ func (c *Cluster) CreateVpc(opts *CreateOptions, execPath string) error {
 	return nil
 }
 
+// GetConnectionInfo retrieves information about your VPC endpoint connections.
+// Inputs:
+//
+//	c is the context of the method call, which includes the AWS Region.
+//	api is the interface that defines the method call.
+//	input defines the input arguments to the service call.
+//
+// Output:
+//
+//	If successful, a DescribeVpcEndpointConnectionsOutput object containing the result of the service call and nil.
+//	Otherwise, nil and an error from the call to DescribeVpcEndpointConnections.
+func GetConnectionInfo(c context.Context,
+	api EC2DescribeVpcEndpointConnectionsAPI,
+	input *ec2.DescribeVpcEndpointConnectionsInput) (*ec2.DescribeVpcEndpointConnectionsOutput, error) {
+	return api.DescribeVpcEndpointConnections(context.Background(), input)
+}
+
+func (c *Cluster) CheckVpc(name, region string) error {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	if err != nil {
+		return fmt.Errorf("error loading config: %v", err)
+	}
+	client := ec2.NewFromConfig(cfg)
+
+	input := &ec2.DescribeVpcEndpointConnectionsInput{Filters: []types.Filter{
+		{Name: aws.String("vpc-endpoint-id"), Values: []string{name}},
+	}}
+
+	resp, err := GetConnectionInfo(context.Background(), client, input)
+	if err != nil {
+		return fmt.Errorf("error retrieving information about your VPC endpoint: %v", err)
+	}
+
+	fmt.Println("VPC endpoint connection information:", resp.VpcEndpointConnections)
+	cons := len(resp.VpcEndpointConnections)
+
+	if cons == 0 {
+		return fmt.Errorf("could not find any VCP endpoint connections in " + region)
+	}
+
+	fmt.Println("VPC endpoint: Details:")
+	respDecrypted, _ := json.MarshalIndent(resp, "", "\t")
+	fmt.Println(string(respDecrypted))
+
+	fmt.Println("Found " + strconv.Itoa(cons) + " VCP endpoint connection(s) in " + region)
+	return nil
+}
+
+// CreateVpc
+func (c *Cluster) CreateVpc(opts *CreateOptions, execPath string) error {
+	const vpcTerraformDir = "terraform/aws-accounts/cloud-platform-aws/vpc"
+
+	fmt.Println("Checking out tf dir")
+	tf, err := tfexec.NewTerraform(vpcTerraformDir, execPath)
+	if err != nil {
+		return fmt.Errorf("failed to create terraform: %w", err)
+	}
+
+	// if .terraform.tfstate directory exists, delete it
+	fmt.Println("Deleting .terraform.tfstate directory")
+	err = deleteLocalState(strings.Join([]string{vpcTerraformDir, ".terraform"}, "/"))
+	if err != nil {
+		return fmt.Errorf("failed to delete .terraform.tfstate directory: %w", err)
+	}
+
+	fmt.Println("Performing a terraform init")
+	err = terraformInit(tf)
+	if err != nil {
+		return fmt.Errorf("failed to init terraform: %w", err)
+	}
+
+	fmt.Println("Creating a new workspace")
+	ws, err := terraformWorkspace(c.Name, tf)
+	if err != nil {
+		return fmt.Errorf("failed to create workspace: %w", err)
+	}
+
+	fmt.Println("Planning in workspace", ws)
+	planPath := fmt.Sprintf("%s/%s-%v", "./", "plan", time.Now().Unix())
+	planOptions := []tfexec.PlanOption{
+		tfexec.Out(planPath),
+		tfexec.Refresh(true),
+		tfexec.Parallelism(1),
+	}
+	defer os.Remove(strings.Join([]string{vpcTerraformDir, planPath}, "/"))
+
+	err = terraformPlan(tf, planOptions, planPath, ws, true)
+	if err != nil {
+		return fmt.Errorf("failed to plan: %w", err)
+	}
+
+	fmt.Println("Applying plan, may take a while...")
+	applyOptions := []tfexec.ApplyOption{
+		tfexec.DirOrPlan(planPath),
+		tfexec.Parallelism(1),
+	}
+	err = terraformApply(tf, applyOptions, c.Name)
+	if err != nil {
+		return fmt.Errorf("failed to apply: %w", err)
+	}
+
+	// Get the endpoint id
+	j, err := tf.Show(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to show: %w", err)
+	}
+
+	var vpcEndpointId string
+	for k, v := range j.Values.Outputs {
+		fmt.Println(k, v)
+		if k == "vpc_id" {
+			vpcEndpointId = v.Value.(string)
+		}
+	}
+	if vpcEndpointId == "" {
+		return fmt.Errorf("failed to find vpc endpoint id")
+	}
+	fmt.Println("VPC endpoint id: " + vpcEndpointId)
+
+	// Check the vpc is created and exists
+	// err = c.CheckVpc(vpcEndpointId, "eu-west-2")
+	// if err != nil {
+	// 	return fmt.Errorf("failed to check the vpc is up and running: %w", err)
+	// }
+
+	fmt.Println("Complete")
+
+	return nil
+}
+
 // CreateCluster creates a new Kubernetes cluster in AWS.
-func createCluster(opts *CreateOptions) error {
+func (c *Cluster) CreateCluster(opts *CreateOptions, execPath string) error {
+	const eksTerraformDir = "terraform/aws-accounts/cloud-platform-aws/vpc/eks"
+
+	fmt.Println("Checking out tf dir")
+	tf, err := tfexec.NewTerraform(eksTerraformDir, execPath)
+	if err != nil {
+		return fmt.Errorf("failed to create terraform: %w", err)
+	}
+
+	// if .terraform.tfstate directory exists, delete it
+	fmt.Println("Deleting .terraform.tfstate directory")
+	err = deleteLocalState(strings.Join([]string{eksTerraformDir, ".terraform"}, "/"))
+	if err != nil {
+		return fmt.Errorf("failed to delete .terraform.tfstate directory: %w", err)
+	}
+
+	fmt.Println("Performing a terraform init")
+	err = terraformInit(tf)
+	if err != nil {
+		return fmt.Errorf("failed to init terraform: %w", err)
+	}
+
+	fmt.Println("Creating a new workspace")
+	ws, err := terraformWorkspace(c.Name, tf)
+	if err != nil {
+		return fmt.Errorf("failed to create workspace: %w", err)
+	}
+
+	fmt.Println("Planning in workspace", ws)
+	planPath := fmt.Sprintf("%s/%s-%v", "./", "plan", time.Now().Unix())
+	planOptions := []tfexec.PlanOption{
+		tfexec.Out(planPath),
+		tfexec.Refresh(true),
+		tfexec.Parallelism(1),
+	}
+
+	err = terraformPlan(tf, planOptions, planPath, ws, true)
+	if err != nil {
+		return fmt.Errorf("failed to plan: %w", err)
+	}
+
+	fmt.Println("Applying plan, may take a while...")
+	applyOptions := []tfexec.ApplyOption{
+		tfexec.DirOrPlan(planPath),
+		tfexec.Parallelism(1),
+	}
+	err = terraformApply(tf, applyOptions, c.Name)
+	if err != nil {
+		return fmt.Errorf("failed to apply: %w", err)
+	}
+
+	// Apply a tactical psp fix for the cluster
+	fmt.Println("Applying a tactical psp fix for the cluster")
+	err = c.ApplyTacticalPspFix()
+	if err != nil {
+		return fmt.Errorf("failed to apply tactical psp fix: %w", err)
+	}
+
 	return nil
 }
 
@@ -277,5 +469,29 @@ func installComponents(opts *CreateOptions) error {
 
 // HealthCheck performs a health check on the Kubernetes cluster.
 func healthCheck(opts *CreateOptions) error {
+	return nil
+}
+
+// ApplyTacticalPspFix deletes the current eks.privileged psp in the cluster.
+// This allows the cluster to be created with a different psp. All pods are recycled
+// so the new psp will be applied.
+func (c *Cluster) ApplyTacticalPspFix() error {
+	client, err := client.NewKubeClientWithValues("", "")
+	if err != nil {
+		return fmt.Errorf("failed to create kubernetes client: %w", err)
+	}
+
+	// Delete the eks.privileged psp
+	err = client.Clientset.PolicyV1beta1().PodSecurityPolicies().Delete(context.Background(), "eks.privileged", metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete eks.privileged psp: %w", err)
+	}
+
+	// Delete all pods in the cluster
+	err = client.Clientset.CoreV1().Pods("").DeleteCollection(context.Background(), metav1.DeleteOptions{}, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to recycle pods: %w", err)
+	}
+
 	return nil
 }

@@ -4,6 +4,8 @@ go 1.19
 
 require (
 	github.com/aws/aws-sdk-go v1.44.11
+	github.com/aws/aws-sdk-go-v2/config v1.15.16
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.51.2
 	github.com/hashicorp/go-version v1.6.0
 	github.com/hashicorp/hc-install v0.4.0
 	github.com/hashicorp/terraform-exec v0.17.2
@@ -25,6 +27,16 @@ require (
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.16.9 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.12.11 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.10 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.16 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.10 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.17 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.10 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.11.14 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.16.11 // indirect
+	github.com/aws/smithy-go v1.12.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
