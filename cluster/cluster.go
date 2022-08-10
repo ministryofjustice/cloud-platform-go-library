@@ -20,6 +20,7 @@ import (
 	"github.com/hashicorp/hc-install/releases"
 	"github.com/hashicorp/hc-install/src"
 	"github.com/hashicorp/terraform-exec/tfexec"
+	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/ministryofjustice/cloud-platform-go-library/client"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
@@ -150,10 +151,9 @@ func verifyClusterOptions(name string, options CreateOptions) error {
 	return nil
 }
 
+// createTerraformObj creates a Terraform object using the version passed as a string.
 func createTerraformObj(tfVersion string) (string, error) {
 	i := install.NewInstaller()
-
-	// We're currently running 0.14.8 but this is subject to change.
 	v := version.Must(version.NewVersion(tfVersion))
 
 	execPath, err := i.Ensure(context.Background(), []src.Source{
@@ -177,6 +177,15 @@ func createTerraformObj(tfVersion string) (string, error) {
 
 // Create creates a new Kubernetes cluster using the options passed to it.
 func (c *Cluster) Create(opts *CreateOptions) error {
+	// Directory paths in the cloud-platform-infrastructure repository.
+	const (
+		baseDir       = "terraform/aws-accounts/cloud-platform-aws/"
+		vpcDir        = baseDir + "vpc/"
+		clusterDir    = vpcDir + "eks/"
+		componentsDir = clusterDir + "components/"
+	)
+
+	// Verify the options passed to Create are allowed.
 	err := verifyClusterOptions(opts.Name, *opts)
 	if err != nil {
 		return fmt.Errorf("error verifying cluster options: %s", err)
@@ -185,26 +194,27 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 	// Add name to the cluster object.
 	c.Name = opts.Name
 
+	// Create Terraform object to use throught method.
 	execPath, err := createTerraformObj(opts.TerraformVersion)
 	if err != nil {
 		return fmt.Errorf("error creating terraform obj: %s", err)
 	}
 
-	// create vpc
-	vpc, err := c.CreateVpc(opts, execPath)
+	// Create the VPC.
+	state, err := c.TerraformApply(opts, vpcDir, execPath)
 	if err != nil {
 		return fmt.Errorf("error creating vpc: %s", err)
 	}
 
 	// Check the vpc is created and exists
-	err = c.CheckVpc(vpc, opts.AwsCredentials.Session)
+	err = c.CheckVpc(state, opts.AwsCredentials.Session)
 	if err != nil {
 		return fmt.Errorf("failed to check the vpc is up and running: %w", err)
 	}
 
-	// create kubernetes cluster
+	// Create the Kubernetes cluster.
 	fmt.Println("Creating Kubernetes cluster")
-	err = c.CreateCluster(opts, execPath)
+	_, err = c.TerraformApply(opts, clusterDir, execPath)
 	if err != nil {
 		return err
 	}
@@ -224,10 +234,24 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 	return nil
 }
 
-func (c *Cluster) terraformInitApply(dir string, opts CreateOptions, tf *tfexec.Terraform) (string, error) {
-	ws, err := terraformInit(c.Name, tf)
+func getVpcFromState(state *tfjson.State) (string, error) {
+	var vpcEndpointId string
+	for k, v := range state.Values.Outputs {
+		if k == "vpc_id" {
+			vpcEndpointId = v.Value.(string)
+		}
+	}
+	if vpcEndpointId == "" {
+		return "", fmt.Errorf("failed to find vpc endpoint id")
+	}
+
+	return vpcEndpointId, nil
+}
+
+func (c *Cluster) terraformInitApply(dir string, tf *tfexec.Terraform) (*tfjson.State, error) {
+	ws, err := intialise(c.Name, tf)
 	if err != nil {
-		return "", fmt.Errorf("failed to init terraform: %w", err)
+		return nil, fmt.Errorf("failed to init terraform: %w", err)
 	}
 
 	fmt.Println("Planning in workspace", ws)
@@ -239,9 +263,9 @@ func (c *Cluster) terraformInitApply(dir string, opts CreateOptions, tf *tfexec.
 	}
 	defer os.Remove(strings.Join([]string{dir, planPath}, "/"))
 
-	err = terraformPlan(tf, planOptions, planPath, true)
+	err = plan(tf, planOptions, planPath, true)
 	if err != nil {
-		return "", fmt.Errorf("failed to plan: %w", err)
+		return nil, fmt.Errorf("failed to plan: %w", err)
 	}
 
 	fmt.Println("Applying plan, may take a while...")
@@ -249,30 +273,18 @@ func (c *Cluster) terraformInitApply(dir string, opts CreateOptions, tf *tfexec.
 		tfexec.DirOrPlan(planPath),
 		tfexec.Parallelism(1),
 	}
-	err = terraformApply(tf, applyOptions, c.Name)
+	err = apply(tf, applyOptions, c.Name)
 	if err != nil {
-		return "", fmt.Errorf("failed to apply: %w", err)
+		return nil, fmt.Errorf("failed to apply: %w", err)
 	}
 
-	// Get the endpoint id
-	j, err := tf.Show(context.Background())
+	state, err := tf.Show(context.Background())
 	if err != nil {
-		return "", fmt.Errorf("failed to show: %w", err)
+		return nil, fmt.Errorf("failed to show: %w", err)
 	}
-
-	var vpcEndpointId string
-	for k, v := range j.Values.Outputs {
-		if k == "vpc_id" {
-			vpcEndpointId = v.Value.(string)
-		}
-	}
-	if vpcEndpointId == "" {
-		return "", fmt.Errorf("failed to find vpc endpoint id")
-	}
-
 	fmt.Println("Vpc Complete")
 
-	return vpcEndpointId, nil
+	return state, nil
 }
 
 func deleteLocalState(path string) error {
@@ -286,7 +298,8 @@ func deleteLocalState(path string) error {
 	return nil
 }
 
-func terraformInit(workspace string, tf *tfexec.Terraform) (string, error) {
+// intialise performs the `terraform init` function.
+func intialise(workspace string, tf *tfexec.Terraform) (string, error) {
 	err := tf.Init(context.Background())
 	if err != nil {
 		return "", err
@@ -319,7 +332,7 @@ func terraformWorkspace(workspace string, tf *tfexec.Terraform) (string, error) 
 	return ws, nil
 }
 
-func terraformPlan(tf *tfexec.Terraform, planOptions []tfexec.PlanOption, planPath string, output bool) error {
+func plan(tf *tfexec.Terraform, planOptions []tfexec.PlanOption, planPath string, output bool) error {
 	_, err := tf.Plan(context.Background(), planOptions...)
 	if err != nil {
 		return fmt.Errorf("failed to execute the plan command: %w", err)
@@ -339,7 +352,7 @@ func terraformPlan(tf *tfexec.Terraform, planOptions []tfexec.PlanOption, planPa
 	return nil
 }
 
-func terraformApply(tf *tfexec.Terraform, applyOptions []tfexec.ApplyOption, workspace string) error {
+func apply(tf *tfexec.Terraform, applyOptions []tfexec.ApplyOption, workspace string) error {
 	var noInitErr *tfexec.ErrNoInit
 	var couldNotLoad *tfexec.ErrConfigInvalid
 
@@ -347,7 +360,7 @@ func terraformApply(tf *tfexec.Terraform, applyOptions []tfexec.ApplyOption, wor
 	// handle a case where you need to init again
 	if errors.As(err, &noInitErr) || errors.As(err, &couldNotLoad) {
 		fmt.Println("Init required, running init again")
-		_, err = terraformInit(workspace, tf)
+		_, err = intialise(workspace, tf)
 		if err != nil {
 			return err
 		}
@@ -360,7 +373,12 @@ func terraformApply(tf *tfexec.Terraform, applyOptions []tfexec.ApplyOption, wor
 }
 
 // CheckVpc asserts that the vpc is up and running. It tests the vpc state and id.
-func (c *Cluster) CheckVpc(vpcId string, sess *session.Session) error {
+func (c *Cluster) CheckVpc(state *tfjson.State, sess *session.Session) error {
+	vpcId, err := getVpcFromState(state)
+	if err != nil {
+		return fmt.Errorf("unable to get vpcid from statefile: %e", err)
+	}
+
 	svc := ec2.New(sess)
 
 	vpc, err := svc.DescribeVpcs(&ec2.DescribeVpcsInput{
@@ -393,14 +411,13 @@ func (c *Cluster) CheckVpc(vpcId string, sess *session.Session) error {
 }
 
 // CreateVpc
-func (c *Cluster) CreateVpc(opts *CreateOptions, execPath string) (string, error) {
-	const vpcTerraformDir = "terraform/aws-accounts/cloud-platform-aws/vpc"
+func (c *Cluster) TerraformApply(opts *CreateOptions, directory, execPath string) (*tfjson.State, error) {
 	var out bytes.Buffer
 
 	fmt.Println("Checking out tf dir")
-	tf, err := tfexec.NewTerraform(vpcTerraformDir, execPath)
+	tf, err := tfexec.NewTerraform(directory, execPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to create terraform: %w", err)
+		return nil, fmt.Errorf("failed to create terraform: %w", err)
 	}
 
 	tf.SetStdout(&out)
@@ -408,12 +425,12 @@ func (c *Cluster) CreateVpc(opts *CreateOptions, execPath string) (string, error
 
 	// if .terraform.tfstate directory exists, delete it
 	fmt.Println("Deleting .terraform.tfstate directory")
-	err = deleteLocalState(strings.Join([]string{vpcTerraformDir, ".terraform"}, "/"))
+	err = deleteLocalState(strings.Join([]string{directory, ".terraform"}, "/"))
 	if err != nil {
-		return "", fmt.Errorf("failed to delete .terraform.tfstate directory: %w", err)
+		return nil, fmt.Errorf("failed to delete .terraform.tfstate directory: %w", err)
 	}
 
-	return c.terraformInitApply(vpcTerraformDir, *opts, tf)
+	return c.terraformInitApply(directory, tf)
 }
 
 // CreateCluster creates a new Kubernetes cluster in AWS.
@@ -434,7 +451,7 @@ func (c *Cluster) CreateCluster(opts *CreateOptions, execPath string) error {
 	}
 
 	fmt.Println("Performing a terraform init")
-	ws, err := terraformInit(c.Name, tf)
+	ws, err := intialise(c.Name, tf)
 	if err != nil {
 		return fmt.Errorf("failed to init terraform: %w", err)
 	}
@@ -447,7 +464,7 @@ func (c *Cluster) CreateCluster(opts *CreateOptions, execPath string) error {
 		tfexec.Parallelism(1),
 	}
 
-	err = terraformPlan(tf, planOptions, planPath, true)
+	err = plan(tf, planOptions, planPath, true)
 	if err != nil {
 		return fmt.Errorf("failed to plan: %w", err)
 	}
@@ -457,7 +474,7 @@ func (c *Cluster) CreateCluster(opts *CreateOptions, execPath string) error {
 		tfexec.DirOrPlan(planPath),
 		tfexec.Parallelism(1),
 	}
-	err = terraformApply(tf, applyOptions, c.Name)
+	err = apply(tf, applyOptions, c.Name)
 	if err != nil {
 		return fmt.Errorf("failed to apply: %w", err)
 	}
