@@ -63,6 +63,8 @@ type CreateOptions struct {
 	TimeOut int
 	// Debug is true if the cluster should be created in debug mode.
 	Debug bool
+	// Fast creates the fastest possible cluster.
+	Fast bool
 
 	// Auth0 is the Auth0 domain and secret information.
 	Auth0 AuthOpts
@@ -235,19 +237,18 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 		return fmt.Errorf("failed to check the vpc is up and running: %w", err)
 	}
 
-	// Add count variable if argument is set.
-	// if opts.Count > 0 {
-	// 	err = c.AddCount(opts.Count)
-	// 	if err != nil {
-	// 		return fmt.Errorf("error adding count variable: %s", err)
-	// 	}
-	// }
+	// If the user specifies a fast build, then we don't need to create the auth0 module.
+	if opts.Fast {
+		opts.TerraformOptions.Apply = append(opts.TerraformOptions.Apply, tfexec.Var(fmt.Sprintf("%s=%v", "auth0_count", 0)))
+		fmt.Println("Fast mode enabled, skipping auth0 creation")
+	}
+
 	// Create the Kubernetes cluster.
 	fmt.Println("Creating Kubernetes cluster")
-	_, err = c.TerraformApply(opts, clusterDir)
-	if err != nil {
-		return err
-	}
+	// _, err = c.TerraformApply(opts, clusterDir)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// install components into kubernetes cluster
 	err = installComponents(opts)
