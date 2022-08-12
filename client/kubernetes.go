@@ -1,11 +1,14 @@
 package client
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
+	"log"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/eks"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"k8s.io/client-go/kubernetes"
@@ -13,6 +16,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/metrics/pkg/client/clientset/versioned"
+	"sigs.k8s.io/aws-iam-authenticator/pkg/token"
 )
 
 // KubeClient is used to pass kubeconfig options
@@ -230,4 +234,70 @@ func DownloadS3Kubeconfig(fileName, kubeconfig string, awsOpt AwsOptions) (strin
 	}
 
 	return kubeconfig, nil
+}
+
+// ClusterDescribe takes the name of a cluster and returns an EKS Cluster type.
+// This is the entry point for the equivalent `aws eks update-kubeconfig --name` command.
+func (awsOpt *AwsOptions) ClusterDescribe(name string) (*eks.Cluster, error) {
+	if awsOpt.Key == "" && awsOpt.Secret == "" || awsOpt.Profile == "" {
+		return nil, fmt.Errorf("AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY or AWS_PROFILE must be set")
+	}
+
+	if awsOpt.Region == "" {
+		awsOpt.Region = "eu-west-2"
+	}
+
+	sess := session.Must(session.NewSession(&aws.Config{
+		Region: &awsOpt.Region,
+	}))
+	eksSvc := eks.New(sess)
+
+	input := &eks.DescribeClusterInput{
+		Name: aws.String(name),
+	}
+	result, err := eksSvc.DescribeCluster(input)
+	if err != nil {
+		log.Fatalf("Error calling DescribeCluster: %v", err)
+	}
+
+	return result.Cluster, nil
+}
+
+// AuthToken takes an EKS Cluster type and returns an auth token using the
+// Iam authenticator.
+func AuthToken(cluster *eks.Cluster) (ca []byte, tok token.Token, err error) {
+	gen, err := token.NewGenerator(true, false)
+	if err != nil {
+		return
+	}
+	opts := &token.GetTokenOptions{
+		ClusterID: aws.StringValue(cluster.Name),
+	}
+	tok, err = gen.GetWithOptions(opts)
+	if err != nil {
+		return
+	}
+	ca, err = base64.StdEncoding.DecodeString(aws.StringValue(cluster.CertificateAuthority.Data))
+	if err != nil {
+		return
+	}
+	return
+}
+
+// BuildEksClientset takes an EKS Cluster type and sets the clientSet field of the KubeClient type.
+func (kube *KubeClient) BuildEksClientset(ca []byte, tok token.Token, cluster *eks.Cluster) error {
+	clientset, err := kubernetes.NewForConfig(
+		&rest.Config{
+			Host:        aws.StringValue(cluster.Endpoint),
+			BearerToken: tok.Token,
+			TLSClientConfig: rest.TLSClientConfig{
+				CAData: ca,
+			},
+		},
+	)
+	if err != nil {
+		return err
+	}
+	kube.Clientset = clientset
+	return nil
 }
