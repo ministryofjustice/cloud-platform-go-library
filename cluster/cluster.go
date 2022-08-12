@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/eks"
 	"github.com/hashicorp/go-version"
 	install "github.com/hashicorp/hc-install"
 	"github.com/hashicorp/hc-install/fs"
@@ -79,11 +80,13 @@ type CreateOptions struct {
 type TerraformOptions struct {
 	Apply    []tfexec.ApplyOption
 	Plan     []tfexec.PlanOption
+	Init     []tfexec.InitOption
 	PlanPath string
 	// Version is the version of Terraform to use.
 	Version string
 	// ExecPath is the path to the Terraform executable.
-	ExecPath string
+	ExecPath  string
+	Workspace string
 }
 
 // AuthOpts represents the options for Auth0.
@@ -218,6 +221,7 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 
 	// Add name to the cluster object.
 	c.Name = opts.Name
+	opts.TerraformOptions.Workspace = c.Name
 
 	// Create Terraform object to use throught method.
 	err = opts.TerraformOptions.CreateTerraformObj()
@@ -239,23 +243,29 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 
 	// If the user specifies a fast build, then we don't need to create the auth0 module.
 	if opts.Fast {
-		opts.TerraformOptions.Apply = append(opts.TerraformOptions.Apply, tfexec.Var(fmt.Sprintf("%s=%v", "auth0_count", 0)))
-		fmt.Println("Fast mode enabled, skipping auth0 creation")
+		opts.TerraformOptions.Apply = append(opts.TerraformOptions.Apply, tfexec.Var(fmt.Sprintf("%s=%v", "auth0_count", false)))
+		opts.TerraformOptions.Apply = append(opts.TerraformOptions.Apply, tfexec.Var(fmt.Sprintf("%s=%v", "aws_eks_identity_provider_config_oidc_associate", false)))
+		fmt.Println("Fast mode enabled, skipping oidc creation")
 	}
 
 	// Create the Kubernetes cluster.
 	fmt.Println("Creating Kubernetes cluster")
-	// _, err = c.TerraformApply(opts, clusterDir)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// install components into kubernetes cluster
-	err = installComponents(opts)
+	clusterState, err := c.TerraformApply(opts, clusterDir)
 	if err != nil {
 		return err
 	}
 
+	// Check the cluster is created and exists.
+	err = c.CheckCluster(clusterState, opts.AwsCredentials.Session)
+	if err != nil {
+		return fmt.Errorf("failed to check the cluster is up and running: %w", err)
+	}
+
+	fmt.Println("Adding components")
+	_, err = c.TerraformApply(opts, componentsDir)
+	if err != nil {
+		return err
+	}
 	// perform health check on the cluster
 	err = healthCheck(opts)
 	if err != nil {
@@ -263,6 +273,33 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 	}
 
 	return nil
+}
+
+// CheckCluster checks the cluster is created and exists.
+func (c *Cluster) CheckCluster(state *tfjson.State, session *session.Session) error {
+	// Check the cluster is created and exists.
+	cluster, err := c.GetCluster(session)
+	if err != nil {
+		return err
+	}
+
+	if cluster.Status != aws.String("ACTIVE") {
+		return fmt.Errorf("cluster is not active")
+	}
+
+	return nil
+}
+
+func (c *Cluster) GetCluster(session *session.Session) (*eks.Cluster, error) {
+	svc := eks.New(session)
+	cluster, err := svc.DescribeCluster(&eks.DescribeClusterInput{
+		Name: aws.String(c.Name),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return cluster.Cluster, nil
 }
 
 func getVpcFromState(state *tfjson.State) (string, error) {
@@ -294,8 +331,7 @@ func (c *Cluster) terraformInitApply(dir string, tf *tfexec.Terraform, opts Crea
 	}
 
 	fmt.Println("Applying plan, may take a while...")
-	applyOptions := []tfexec.ApplyOption{}
-	err = apply(tf, applyOptions, c.Name)
+	err = apply(tf, opts.TerraformOptions, c.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to apply: %w", err)
 	}
@@ -355,7 +391,17 @@ func terraformWorkspace(workspace string, tf *tfexec.Terraform) (string, error) 
 }
 
 func plan(tf *tfexec.Terraform, opt TerraformOptions, output bool) error {
-	_, err := tf.Plan(context.Background(), opt.Plan...)
+	opt.Init = append(opt.Init, tfexec.Reconfigure(true))
+	err := tf.Init(context.Background(), opt.Init...)
+	if err != nil {
+		_, ok := err.(*tfexec.ErrNoInit)
+		if ok {
+			fmt.Println("No init found, skipping apply")
+			return nil
+		}
+		return fmt.Errorf("failed to init: %w", err)
+	}
+	_, err = tf.Plan(context.Background(), opt.Plan...)
 	if err != nil {
 		return fmt.Errorf("failed to execute the plan command: %w", err)
 	}
@@ -374,11 +420,22 @@ func plan(tf *tfexec.Terraform, opt TerraformOptions, output bool) error {
 	return nil
 }
 
-func apply(tf *tfexec.Terraform, applyOptions []tfexec.ApplyOption, workspace string) error {
+func apply(tf *tfexec.Terraform, opt TerraformOptions, workspace string) error {
 	var noInitErr *tfexec.ErrNoInit
 	var couldNotLoad *tfexec.ErrConfigInvalid
 
-	err := tf.Apply(context.Background(), applyOptions...)
+	opt.Init = append(opt.Init, tfexec.Reconfigure(true))
+	err := tf.Init(context.Background(), opt.Init...)
+	if err != nil {
+		_, ok := err.(*tfexec.ErrNoInit)
+		if ok {
+			fmt.Println("No init found, skipping apply")
+			return nil
+		}
+		return fmt.Errorf("failed to init: %w", err)
+	}
+
+	err = tf.Apply(context.Background(), opt.Apply...)
 	// handle a case where you need to init again
 	if errors.As(err, &noInitErr) || errors.As(err, &couldNotLoad) {
 		fmt.Println("Init required, running init again")
