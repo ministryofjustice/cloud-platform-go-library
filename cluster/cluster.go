@@ -253,8 +253,6 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 		log.Info().Msg("Fast build specified, skipping auth0 module")
 		opts.TerraformOptions.Plan = append(opts.TerraformOptions.Plan, tfexec.Var(fmt.Sprintf("%s=%v", "auth0_count", false)))
 		opts.TerraformOptions.Plan = append(opts.TerraformOptions.Plan, tfexec.Var(fmt.Sprintf("%s=%v", "aws_eks_identity_provider_config_oidc_associate", false)))
-		opts.TerraformOptions.Apply = append(opts.TerraformOptions.Apply, tfexec.Var(fmt.Sprintf("%s=%v", "auth0_count", false)))
-		opts.TerraformOptions.Apply = append(opts.TerraformOptions.Apply, tfexec.Var(fmt.Sprintf("%s=%v", "aws_eks_identity_provider_config_oidc_associate", false)))
 	}
 
 	// Create the Kubernetes cluster.
