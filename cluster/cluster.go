@@ -251,6 +251,8 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 	// If the user specifies a fast build, then we don't need to create the auth0 module.
 	if opts.Fast {
 		log.Info().Msg("Fast build specified, skipping auth0 module")
+		opts.TerraformOptions.Plan = append(opts.TerraformOptions.Plan, tfexec.Var(fmt.Sprintf("%s=%v", "auth0_count", false)))
+		opts.TerraformOptions.Plan = append(opts.TerraformOptions.Plan, tfexec.Var(fmt.Sprintf("%s=%v", "aws_eks_identity_provider_config_oidc_associate", false)))
 		opts.TerraformOptions.Apply = append(opts.TerraformOptions.Apply, tfexec.Var(fmt.Sprintf("%s=%v", "auth0_count", false)))
 		opts.TerraformOptions.Apply = append(opts.TerraformOptions.Apply, tfexec.Var(fmt.Sprintf("%s=%v", "aws_eks_identity_provider_config_oidc_associate", false)))
 	}
