@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -331,10 +330,10 @@ func (c *Cluster) terraformInitApply(dir string, tf *tfexec.Terraform, opts Crea
 		return nil, fmt.Errorf("failed to init terraform: %w", err)
 	}
 
-	fmt.Println("Planning in workspace", ws)
+	log.Info().Msgf("Planning in workspace %s", ws)
 	defer os.Remove(strings.Join([]string{dir, opts.TerraformOptions.PlanPath}, "/"))
 
-	err = plan(tf, opts.TerraformOptions, true)
+	err = plan(tf, opts.TerraformOptions, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to plan: %w", err)
 	}
@@ -424,7 +423,7 @@ func plan(tf *tfexec.Terraform, opt TerraformOptions, output bool) error {
 		return fmt.Errorf("failed to show the plan file: %w", err)
 	}
 
-	fmt.Println(plan)
+	log.Info().Msgf("Plan: %s", plan)
 
 	return nil
 }
@@ -433,6 +432,7 @@ func apply(tf *tfexec.Terraform, opt TerraformOptions, workspace string) error {
 	var noInitErr *tfexec.ErrNoInit
 	var couldNotLoad *tfexec.ErrConfigInvalid
 
+	log.Info().Msgf("Another init is required, executing apply")
 	opt.Init = append(opt.Init, tfexec.Reconfigure(true))
 	err := tf.Init(context.Background(), opt.Init...)
 	if err != nil {
@@ -444,6 +444,7 @@ func apply(tf *tfexec.Terraform, opt TerraformOptions, workspace string) error {
 		return fmt.Errorf("failed to init: %w", err)
 	}
 
+	log.Info().Msgf("Applying in workspace %s", workspace)
 	err = tf.Apply(context.Background(), opt.Apply...)
 	// handle a case where you need to init again
 	if errors.As(err, &noInitErr) || errors.As(err, &couldNotLoad) {
@@ -500,19 +501,18 @@ func (c *Cluster) CheckVpc(state *tfjson.State, sess *session.Session) error {
 
 // CreateVpc
 func (c *Cluster) TerraformApply(opts *CreateOptions, directory string) (*tfjson.State, error) {
-	var out bytes.Buffer
-
-	fmt.Println("Checking out tf dir")
+	log.Info().Msg("Checking out tf dir")
 	tf, err := tfexec.NewTerraform(directory, opts.TerraformOptions.ExecPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create terraform: %w", err)
 	}
 
-	tf.SetStdout(&out)
-	tf.SetStderr(&out)
+	// Set terraofrm out to zerolog
+	tf.SetStdout(log.Logger.With().Caller().Logger())
+	tf.SetStderr(log.Logger.With().Caller().Logger())
 
 	// if .terraform.tfstate directory exists, delete it
-	fmt.Println("Deleting .terraform.tfstate directory")
+	log.Info().Msgf("Deleting local state")
 	err = deleteLocalState(strings.Join([]string{directory, ".terraform"}, "/"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to delete .terraform.tfstate directory: %w", err)
