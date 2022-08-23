@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,6 +23,8 @@ import (
 	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/ministryofjustice/cloud-platform-go-library/client"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -74,7 +75,6 @@ type CreateOptions struct {
 
 	// TerraformOptions are the options to pass to Terraform plan and apply.
 	TerraformOptions TerraformOptions
-	Logger           log.Logger
 }
 
 type TerraformOptions struct {
@@ -205,6 +205,14 @@ func (tf *TerraformOptions) CreateTerraformObj() error {
 
 // Create creates a new Kubernetes cluster using the options passed to it.
 func (c *Cluster) Create(opts *CreateOptions) error {
+	// Setup zerologger
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	if opts.Debug {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	}
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
 	// Directory paths in the cloud-platform-infrastructure repository.
 	const (
 		baseDir       = "terraform/aws-accounts/cloud-platform-aws/"
@@ -213,7 +221,7 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 		componentsDir = clusterDir + "components/"
 	)
 
-	// Verify the options passed to Create are allowed.
+	log.Info().Msgf("Creating cluster %s", opts.Name)
 	err := verifyClusterOptions(opts.Name, *opts)
 	if err != nil {
 		return fmt.Errorf("error verifying cluster options: %s", err)
@@ -229,13 +237,13 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 		return fmt.Errorf("error creating terraform obj: %s", err)
 	}
 
-	// Create VPC
+	log.Info().Msgf("Running terraform apply for VPC using dir: %s", vpcDir)
 	state, err := c.TerraformApply(opts, vpcDir)
 	if err != nil {
 		return fmt.Errorf("error creating vpc: %s", err)
 	}
 
-	// Check the vpc is created and exists
+	log.Info().Msg("The VPC creation is complete, checking vpc state")
 	err = c.CheckVpc(state, opts.AwsCredentials.Session)
 	if err != nil {
 		return fmt.Errorf("failed to check the vpc is up and running: %w", err)
@@ -243,34 +251,35 @@ func (c *Cluster) Create(opts *CreateOptions) error {
 
 	// If the user specifies a fast build, then we don't need to create the auth0 module.
 	if opts.Fast {
+		log.Info().Msg("Fast build specified, skipping auth0 module")
 		opts.TerraformOptions.Apply = append(opts.TerraformOptions.Apply, tfexec.Var(fmt.Sprintf("%s=%v", "auth0_count", false)))
 		opts.TerraformOptions.Apply = append(opts.TerraformOptions.Apply, tfexec.Var(fmt.Sprintf("%s=%v", "aws_eks_identity_provider_config_oidc_associate", false)))
-		fmt.Println("Fast mode enabled, skipping oidc creation")
 	}
 
 	// Create the Kubernetes cluster.
-	fmt.Println("Creating Kubernetes cluster")
+	log.Info().Msgf("Creating the Kubernetes cluster using dir: %s", clusterDir)
 	clusterState, err := c.TerraformApply(opts, clusterDir)
 	if err != nil {
 		return err
 	}
 
 	// Check the cluster is created and exists.
+	log.Info().Msg("The cluster creation is complete, checking cluster state")
 	err = c.CheckCluster(clusterState, opts.AwsCredentials.Session)
 	if err != nil {
 		return fmt.Errorf("failed to check the cluster is up and running: %w", err)
 	}
 
 	fmt.Println("Adding components")
-	_, err = c.TerraformApply(opts, componentsDir)
-	if err != nil {
-		return err
-	}
-	// perform health check on the cluster
-	err = healthCheck(opts)
-	if err != nil {
-		return err
-	}
+	// _, err = c.TerraformApply(opts, componentsDir)
+	// if err != nil {
+	// 	return err
+	// }
+	// // perform health check on the cluster
+	// err = healthCheck(opts)
+	// if err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
