@@ -2,7 +2,7 @@ package client
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -224,7 +224,7 @@ func DownloadS3Kubeconfig(fileName, kubeconfig string, awsOpt AwsOptions) (strin
 	}
 
 	data := buff.Bytes()
-	err = ioutil.WriteFile(kubeconfig, data, 0o644)
+	err = os.WriteFile(kubeconfig, data, 0o644)
 	if err != nil {
 		return "", err
 	}
