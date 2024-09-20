@@ -29,3 +29,15 @@ func ValidateModuleSource(source string, approvedModules map[string]bool) (bool,
 	}
 	return false, fmt.Errorf("module not approved")
 }
+
+// get source line from source file
+func GetSourceLine(source string) string {
+	sourceS := strings.Split(source, "\n")
+	for _, line := range sourceS {
+		if strings.Contains(line, "source") {
+			sourceLine := strings.Split(line, "=")
+			return sourceLine[1]
+		}
+	}
+	return ""
+}
