@@ -5,7 +5,6 @@
 [![test](https://github.com/ministryofjustice/cloud-platform-go-library/actions/workflows/go-test.yaml/badge.svg?event=check_run)](https://github.com/ministryofjustice/cloud-platform-go-library/actions/workflows/go-test.yaml)
 [![codecov](https://codecov.io/gh/ministryofjustice/cloud-platform-go-library/branch/main/graph/badge.svg?token=MGJO976Y2H)](https://codecov.io/gh/ministryofjustice/cloud-platform-go-library)
 
-
 Todo: Furture work
 
 - [ ] Add more tests
