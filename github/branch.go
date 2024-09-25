@@ -7,8 +7,8 @@ import (
 	"github.com/google/go-github/v64/github"
 )
 
-func GetPullRequestBranch(client *github.Client, ctx context.Context, o, r string, n int) (string, error) {
-	pull, _, err := client.PullRequests.Get(ctx, o, r, n)
+func GetPullRequestBranch(client *github.Client, ctx context.Context, owner, repo string, prNumber int) (string, error) {
+	pull, _, err := client.PullRequests.Get(ctx, owner, repo, prNumber)
 	if err != nil {
 		return "", fmt.Errorf("error fetching pull request: %w", err)
 	}

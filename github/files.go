@@ -9,7 +9,6 @@ import (
 )
 
 func SelectFile(file *github.CommitFile) *github.CommitFile {
-	// file filename contains dashboard in the name return file
 	if strings.Contains(*file.Filename, "namespaces/live") && strings.Contains(*file.Filename, ".tf") {
 		return file
 	} else {

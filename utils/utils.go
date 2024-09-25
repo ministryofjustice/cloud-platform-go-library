@@ -6,8 +6,12 @@ import (
 	"strings"
 )
 
-func GetOwnerRepoPull(ref, repo string) (string, string, int) {
-	// get pull request files
+func GetOwnerRepoPull(ref, repo string) (string, string, int, error) {
+
+	if ref == "" || repo == "" {
+		return "", "", 0, fmt.Errorf("ref is empty")
+	}
+
 	githubrefS := strings.Split(ref, "/")
 	prnum := githubrefS[2]
 	pull, _ := strconv.Atoi(prnum)
@@ -16,7 +20,7 @@ func GetOwnerRepoPull(ref, repo string) (string, string, int) {
 	owner := repoS[0]
 	repoName := repoS[1]
 
-	return owner, repoName, pull
+	return owner, repoName, pull, nil
 }
 
 func ValidateModuleSource(source string, approvedModules map[string]bool) (bool, error) {
@@ -30,7 +34,6 @@ func ValidateModuleSource(source string, approvedModules map[string]bool) (bool,
 	return false, fmt.Errorf("module not approved")
 }
 
-// get source line from source file
 func GetSourceLine(source string) string {
 	sourceS := strings.Split(source, "\n")
 	for _, line := range sourceS {

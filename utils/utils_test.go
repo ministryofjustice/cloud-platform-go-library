@@ -29,7 +29,7 @@ func TestGetOwnerRepoPull(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1, got2 := GetOwnerRepoPull(tt.args.ref, tt.args.repo)
+			got, got1, got2, got3 := GetOwnerRepoPull(tt.args.ref, tt.args.repo)
 			if got != tt.want {
 				t.Errorf("GetOwnerRepoPull() got = %v, want %v", got, tt.want)
 			}
@@ -38,6 +38,9 @@ func TestGetOwnerRepoPull(t *testing.T) {
 			}
 			if got2 != tt.want2 {
 				t.Errorf("GetOwnerRepoPull() got2 = %v, want %v", got2, tt.want2)
+			}
+			if got3 != nil {
+				t.Errorf("GetOwnerRepoPull() got3 = %v, want %v", got3, nil)
 			}
 		})
 	}
@@ -55,22 +58,40 @@ func TestValidateModuleSource(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "Test ValidateModuleSource True",
+			name: "Test ValidateModuleSource True Multiple Modules",
 			args: args{
 				source: "github.com/ministryofjustice/cloud-platform-terraform-ecr-credentials",
 				approvedModules: map[string]bool{
-					"github.com/ministryofjustice/cloud-platform-terraform-ecr-credentials": true,
+					"github.com/ministryofjustice/cloud-platform-terraform-rds-instance":     false,
+					"github.com/ministryofjustice/cloud-platform-terraform-rds-aurora":       false,
+					"github.com/ministryofjustice/cloud-platform-terraform-serviceaccount":   false,
+					"github.com/ministryofjustice/cloud-platform-terraform-dynamodb-cluster": false,
+					"github.com/ministryofjustice/cloud-platform-terraform-sqs":              false,
+					"github.com/ministryofjustice/cloud-platform-terraform-s3-bucket":        false,
+					"github.com/ministryofjustice/cloud-platform-terraform-sns-topic":        false,
+					"github.com/ministryofjustice/cloud-platform-terraform-secrets-manager":  false,
+					"github.com/ministryofjustice/cloud-platform-terraform-opensearch":       false,
+					"github.com/ministryofjustice/cloud-platform-terraform-ecr-credentials":  true,
 				},
 			},
 			want:    true,
 			wantErr: false,
 		},
 		{
-			name: "Test ValidateModuleSource False",
+			name: "Test ValidateModuleSource False Multiple Modules",
 			args: args{
 				source: "github.com/ministryofjustice/cloud-platform-terraform-ecr-credentials",
 				approvedModules: map[string]bool{
-					"github.com/ministryofjustice/cloud-platform-terraform-ecr-credentials": false,
+					"github.com/ministryofjustice/cloud-platform-terraform-rds-instance":     true,
+					"github.com/ministryofjustice/cloud-platform-terraform-rds-aurora":       false,
+					"github.com/ministryofjustice/cloud-platform-terraform-serviceaccount":   false,
+					"github.com/ministryofjustice/cloud-platform-terraform-dynamodb-cluster": false,
+					"github.com/ministryofjustice/cloud-platform-terraform-sqs":              false,
+					"github.com/ministryofjustice/cloud-platform-terraform-s3-bucket":        false,
+					"github.com/ministryofjustice/cloud-platform-terraform-sns-topic":        false,
+					"github.com/ministryofjustice/cloud-platform-terraform-secrets-manager":  false,
+					"github.com/ministryofjustice/cloud-platform-terraform-opensearch":       false,
+					"github.com/ministryofjustice/cloud-platform-terraform-ecr-credentials":  false,
 				},
 			},
 			want:    false,

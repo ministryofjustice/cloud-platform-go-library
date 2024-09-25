@@ -10,24 +10,18 @@ import (
 )
 
 func GetTFBody(source string) (hcl.Body, error) {
-	// Parse the HCL file
 	parser := hclparse.NewParser()
 	file, diags := parser.ParseHCLFile(source)
 	if diags.HasErrors() {
-		fmt.Println("error parsing HCL file")
 		return nil, fmt.Errorf("error parsing HCL file")
 	}
 	return file.Body, nil
 }
 
-func MapTFFile(source string, body hcl.Body) (interface{}, error) {
-	// switch case to map the terraform file to the struct
-	// this will allow the data to be queried for self approval
-
+func MapTfFileToStruct(source string, body hcl.Body) (interface{}, error) {
 	switch source {
 	case "github.com/ministryofjustice/cloud-platform-terraform-ecr-credentials":
 		var ecr structs.ECR
-		// Decode the HCL file
 		diags := gohcl.DecodeBody(body, nil, &ecr)
 		if diags.HasErrors() {
 			fmt.Println("error decoding HCL file")
@@ -35,7 +29,6 @@ func MapTFFile(source string, body hcl.Body) (interface{}, error) {
 		}
 		return ecr, nil
 	default:
-		fmt.Println("module not found")
 		return nil, fmt.Errorf("module not found")
 	}
 }
