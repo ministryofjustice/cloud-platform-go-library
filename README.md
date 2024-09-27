@@ -4,7 +4,6 @@
 [![staticcheck](https://github.com/ministryofjustice/cloud-platform-go-library/actions/workflows/go-vet-lint-deps.yaml/badge.svg)](https://github.com/ministryofjustice/cloud-platform-go-library/actions/workflows/go-vet-lint-deps.yaml)
 [![test](https://github.com/ministryofjustice/cloud-platform-go-library/actions/workflows/go-test.yaml/badge.svg)](https://github.com/ministryofjustice/cloud-platform-go-library/actions/workflows/go-test.yaml)
 
-
 Todo: Furture work
 
 - [ ] Add more tests
