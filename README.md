@@ -8,6 +8,5 @@
 Todo: Furture work
 
 - [ ] Add more tests
-- [ ] Add more examples for each function
 - [ ] Add more documentation
 - [ ] Add more features
