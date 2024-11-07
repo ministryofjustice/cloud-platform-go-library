@@ -7,6 +7,20 @@ import (
 	"github.com/google/go-github/v64/github"
 )
 
+// CheckRunCompletion checks the completion status of check runs for a given pull request.
+// It returns true if all check runs have completed successfully, false if any check run has failed,
+// and an error if there was an issue fetching the check runs.
+//
+// Parameters:
+//   - ctx: The context for the request.
+//   - client: The GitHub client to use for making API requests.
+//   - owner: The owner of the repository.
+//   - repo: The name of the repository.
+//   - prNumber: The pull request number.
+//
+// Returns:
+//   - bool: True if all check runs are successful, false otherwise.
+//   - error: An error if there was an issue fetching the check runs.
 func CheckRunCompletion(ctx context.Context, client *github.Client, owner, repo string, prNumber int) (bool, error) {
 	prNumberStr := strconv.Itoa(prNumber)
 
