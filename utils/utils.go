@@ -7,7 +7,6 @@ import (
 )
 
 func GetOwnerRepoPull(ref, repo string) (string, string, int, error) {
-
 	if ref == "" || repo == "" {
 		return "", "", 0, fmt.Errorf("ref is empty")
 	}
